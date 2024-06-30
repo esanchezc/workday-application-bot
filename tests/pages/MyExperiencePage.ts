@@ -1,93 +1,89 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type Page, type Locator } from '@playwright/test';
+import { ExperienceEntry } from './ExperienceEntry';
+import { EducationEntry } from './EducationEntry';
 
 export class MyExperiencePage {
     readonly page: Page;
 
+    // Locators
+    private readonly pageHeading: Locator;
+    private readonly addAnotherWorkExperienceButton: Locator;
+    private readonly addEducationButton: Locator;
+    private readonly addLanguageButton: Locator;
+    private readonly skillSearchInput: Locator;
+    private readonly addWebsiteButton: Locator;
+    private readonly resumeUploadInput: Locator;
+    private readonly saveAndContinueButton: Locator;
+
     constructor(page: Page) {
         this.page = page;
+
+        // Initialize locators
+        this.pageHeading = page.getByRole('heading', { name: 'My Experience' });
+        this.addAnotherWorkExperienceButton = page.getByLabel('Add Another Work Experience');
+        this.addEducationButton = page.getByTestId('educationSection').getByTestId('Add');
+        this.addLanguageButton = page.getByTestId('languageSection').getByTestId('Add');
+        this.skillSearchInput = page.getByTestId('formField-skillsPrompt').getByPlaceholder('Search');
+        this.addWebsiteButton = page.getByTestId('Add');
+        this.resumeUploadInput = page.getByTestId('resumeUpload').locator('input[type="file"]');
+        this.saveAndContinueButton = page.getByRole('button', { name: 'Save and Continue' });
     }
 
-    async addExperience(work_id, title, company, location, from_date, to_date, role_description) {
-        await expect(this.page.getByRole('heading', { name: 'My Experience' })).toBeVisible();
-        const experienceSection = this.page.getByTestId(`workExperience-${work_id}`);
-        await experienceSection.getByLabel('Job Title*').fill(title);
-        await experienceSection.getByLabel('Company*').fill(company);
-        await experienceSection.getByLabel('Location').fill(location);
-        await experienceSection.getByTestId('formField-startDate').getByTestId('dateSectionMonth-input').fill(from_date.month);
-        await experienceSection.getByTestId('formField-startDate').getByTestId('dateSectionYear-input').fill(from_date.year);
-        if (to_date === 'Present') {
-            await experienceSection.getByTestId('currentlyWorkHere').click()
-        } else {
-            await experienceSection.getByTestId('formField-endDate').getByTestId('dateSectionMonth-input').fill(to_date.month);
-            await experienceSection.getByTestId('formField-endDate').getByTestId('dateSectionYear-input').fill(to_date.year);
-        }
-        const description = role_description.join('\n');
-        await experienceSection.getByLabel('Role Description').fill(description);
+    async isLoaded(): Promise<void> {
+        await expect(this.pageHeading).toBeVisible();
     }
 
-    async addAnotherExperience() {
-        await this.page.getByLabel('Add Another Work Experience').click();
+    async addExperience(workId: string, title: string, company: string, location: string, fromDate: { month: string, year: string }, toDate: string | { month: string, year: string }, roleDescription: string[]): Promise<void> {
+        await this.isLoaded();
+        const experienceEntry = new ExperienceEntry(this.page, workId);
+        await experienceEntry.fillDetails(title, company, location, fromDate, toDate, roleDescription);
     }
 
-    async deleteLastExperience(work_id) {
-        await this.page.getByTestId(`workExperience-${work_id}`).getByTestId('panel-set-delete-button').click();
+    async addAnotherExperience(): Promise<void> {
+        await this.addAnotherWorkExperienceButton.click();
     }
 
-    async addFirstEducation() {
-        await this.page.getByTestId('educationSection').getByTestId('Add').click()
+    async deleteExperience(workId: string): Promise<void> {
+        const experienceEntry = new ExperienceEntry(this.page, workId);
+        await experienceEntry.delete();
     }
 
-    async addFirstLanguage() {
-        await this.page.getByTestId('languageSection').getByTestId('Add').click()
+    async addFirstEducation(): Promise<void> {
+        await this.addEducationButton.click();
     }
 
-    async addEducation(edu_id: number, school: string, degree: string, fieldOfStudy: string) {
-        const educationSection = this.page.getByTestId(`education-${edu_id}`);
-        await educationSection.getByTestId('formField-schoolItem').getByPlaceholder('Search').click();
-        await educationSection.getByTestId('searchBox').fill(school);
-        await educationSection.getByTestId('searchBox').press('Enter');
-        const university = this.page.getByLabel(school, { exact: true }).getByTestId('radioBtn');
-        try {
-            const isVisible = await university.isVisible();
-            if (!isVisible) {
-                await university.waitFor({ state: 'visible', timeout: 1000 });
-            }
-            await university.click();
-        } catch (error) {
-            console.log(`${school} was not visible within 1 second, skipping`);
-        }
-        await educationSection.getByTestId('degree').click();
-        await expect(educationSection.getByTestId('promptOption')).toHaveText(school);
-        await educationSection.getByTestId('degree').click();
-        await this.page.getByRole('option', { name: degree }).click();
-        await educationSection.getByTestId('formField-field-of-study').getByPlaceholder('Search').click()
-        await expect(this.page.getByLabel('Accounting', { exact: true }).getByTestId('radioBtn')).toBeVisible();
-        await educationSection.getByTestId('formField-field-of-study').getByPlaceholder('Search').fill(fieldOfStudy);
-        await educationSection.getByTestId('formField-field-of-study').getByPlaceholder('Search').press('Enter');
-        await this.page.getByText(fieldOfStudy).first().click();
-        await expect(educationSection.getByTestId('formField-field-of-study').getByTestId('promptOption')).toHaveText(fieldOfStudy);
-        await this.page.getByTestId('educationSection').getByTestId('Add Another').click();
-        await this.page.getByTestId('educationSection').getByTestId('Add Another').click();
+    async addEducation(eduId: number, school: string, degree: string, fieldOfStudy: string): Promise<void> {
+        const educationEntry = new EducationEntry(this.page, eduId);
+        await educationEntry.fillDetails(school, degree, fieldOfStudy);
     }
 
-    async addLanguage(lang_id: number, language: string) {
-        const languageSection = this.page.getByTestId(`language-${lang_id}`);
+    async deleteEducation(eduId: number): Promise<void> {
+        const educationEntry = new EducationEntry(this.page, eduId);
+        await educationEntry.delete();
+    }
+
+    async addFirstLanguage(): Promise<void> {
+        await this.addLanguageButton.click();
+    }
+
+    async addLanguage(langId: number, language: string): Promise<void> {
+        const languageSection = this.page.getByTestId(`language-${langId}`);
         await languageSection.getByTestId('language').click();
         await this.page.getByText(language).click();
         await languageSection.getByTestId('nativeLanguage').click();
         for (let i = 0; i < 5; i++) {
             await languageSection.getByTestId(`languageProficiency-${i}`).click();
             await this.page.getByRole('option', { name: '5 - Fluent' }).first().click();
-            await expect(languageSection.getByTestId(`languageProficiency-${i}`)).toHaveText('5 - Fluent')
+            await expect(languageSection.getByTestId(`languageProficiency-${i}`)).toHaveText('5 - Fluent');
         }
         await this.page.getByTestId('languageSection').getByTestId('Add Another').click();
     }
 
-    async addSkill(skill: string) {
-        await this.page.getByTestId('formField-skillsPrompt').getByPlaceholder('Search').fill(skill);
-        await this.page.getByTestId('formField-skillsPrompt').getByPlaceholder('Search').press('Enter');
+    async addSkill(skill: string): Promise<void> {
+        await this.skillSearchInput.fill(skill);
+        await this.skillSearchInput.press('Enter');
         try {
-            await expect(this.page.getByTestId('promptTitle')).toBeVisible()
+            await expect(this.page.getByTestId('promptTitle')).toBeVisible();
             const skillCheckbox = this.page.getByLabel(skill).first().getByTestId('checkboxPanel');
             await skillCheckbox.waitFor({ state: 'visible', timeout: 500 });
             await skillCheckbox.click();
@@ -96,26 +92,21 @@ export class MyExperiencePage {
         }
     }
 
-    async addWebsite(website: string) {
-        await this.page.getByTestId('Add').click();
-        await this.page.getByTestId('website').fill(website)
+    async addWebsite(website: string): Promise<void> {
+        await this.addWebsiteButton.click();
+        await this.page.getByTestId('website').fill(website);
     }
 
-    async uploadResume(resumeFile: string) {
-        const fileInput = this.page.getByTestId('resumeUpload').locator('input[type="file"]');
-        await fileInput.setInputFiles(resumeFile);    
+    async uploadResume(resumeFile: string): Promise<void> {
+        await this.resumeUploadInput.setInputFiles(resumeFile);
         await this.page.waitForSelector('text=Successfully Uploaded', { state: 'visible', timeout: 30000 });
     }
 
-    async saveAndContinue() {
-        await this.page.getByRole('button', { name: 'Save and Continue' }).click();
+    async saveAndContinue(): Promise<void> {
+        await this.saveAndContinueButton.click();
     }
 
-    async deleteLastEducation(edu_id) {
-        await this.page.getByTestId(`education-${edu_id}`).getByTestId('panel-set-delete-button').click();
-    }
-
-    async deleteLastLangauge(lang_id) {
-        await this.page.getByTestId(`language-${lang_id}`).getByTestId('panel-set-delete-button').click();
+    async deleteLastLanguage(langId: number): Promise<void> {
+        await this.page.getByTestId(`language-${langId}`).getByTestId('panel-set-delete-button').click();
     }
 }
