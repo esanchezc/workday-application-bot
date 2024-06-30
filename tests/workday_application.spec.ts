@@ -1,63 +1,91 @@
-import { test, expect, selectors } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import { LoginPage } from './pages/LoginPage';
 import { MyInformationPage } from './pages/MyInformationPage';
 import { MyExperiencePage } from './pages/MyExperiencePage';
-const fs = require('fs').promises;
+import { CV } from '../types/CV';
+import { readCV } from '../utils/fileUtils';
 
 test.describe('Apply to job in Workday', () => {
-  let cv;
+  let cv: CV;
 
   test.beforeAll(async () => {
-    const cvFilePath = 'cv.json';
-    const jsonData = await fs.readFile(cvFilePath, 'utf-8');
-    cv = JSON.parse(jsonData);
-    // selectors.setTestIdAttribute('data-automation-id')
-  })
+    cv = await readCV('cv.json');
+  });
 
   test('Apply to job', async ({ page }) => {
-    const url = 'https://intel.wd1.myworkdayjobs.com/en-US/External/job/Virtual-US/Cloud-Automation-Test-Engineer_JR0264891-1/apply/applyManually?source=LinkedIn'
+    const url = 'https://tricentis.wd1.myworkdayjobs.com/en-US/Tricentis_Careers/job/Austin%2C-Texas/Lead-Software-Test-Engineer_JR103636/apply/applyManually';
     const loginPage = new LoginPage(page);
     const myInfoPage = new MyInformationPage(page);
     const myExpPage = new MyExperiencePage(page);
 
-    await loginPage.navigate(url);
-    await loginPage.login('esanchezc.sqa@gmail.com', 'Test1234!');
-    await myInfoPage.isLoaded();
-    await myInfoPage.fillHowDidYouHearFromUs('LinkedIn', 'United States of America');
-    let personal_info = cv.personal_info;
-    await myInfoPage.fillName(personal_info.first_name, personal_info.last_name);
-    let address = personal_info.address;
-    await myInfoPage.fillAddress(address.street, address.city, address.state, address.zip_code);
-    await myInfoPage.assertEmail(personal_info.email);
-    await myInfoPage.fillPhoneNumber(personal_info.phone);
-    await myInfoPage.saveAndContinue();
-    let work_id = 1;
-    for (const exp of cv.work_experience) {
-      await myExpPage.addExperience(work_id, exp.job_title, exp.company, exp.location, exp.dates.start, exp.dates.end, exp.description);
-      await myExpPage.addAnotherExperience();
-      work_id++;
-    }
-    await myExpPage.deleteLastExperience(work_id);
-    await myExpPage.addFirstEducation();
-    let edu_id = 1;
-    for (const edu of cv.education) {
-      await myExpPage.addEducation(edu_id, edu.university, edu.degree, edu.field);
-      edu_id++;
-    }
-    await myExpPage.deleteLastEducation(edu_id);
-    let lang_id = 1;
-    await myExpPage.addFirstLanguage()
-    for (const lang of cv.languages) {
-      await myExpPage.addLanguage(lang_id, lang);
-      lang_id++;
-    }
-    await myExpPage.deleteLastLangauge(lang_id);
-    const allSkills = Object.values(cv.skills).flat();
-    for (const skill of allSkills) {
-      await myExpPage.addSkill(String(skill));
-    }
-    await myExpPage.uploadResume("Emanuel Sanchez - SWE.pdf")
-    await myExpPage.addWebsite(personal_info.github);
-    await myExpPage.saveAndContinue();
+    await test.step('Login', async () => {
+      await loginPage.navigate(url);
+      await loginPage.login('esanchezc.sqa@gmail.com', 'Test1234!');
+    });
+
+    await test.step('Fill Personal Information', async () => {
+      await myInfoPage.isLoaded();
+      await myInfoPage.fillHowDidYouHearFromUs('LinkedIn', 'United States of America');
+      await myInfoPage.fillPersonalInfo(cv.personal_info);
+      await myInfoPage.saveAndContinue();
+    });
+
+    await test.step('Fill Work Experience', async () => {
+      for (const [index, exp] of cv.work_experience.entries()) {
+        await myExpPage.addExperience(
+          (index + 1).toString(), // Convert to string as workId is a string
+          exp.job_title,
+          exp.company,
+          exp.location,
+          exp.dates.start,
+          exp.dates.end,
+          exp.description
+        );
+        if (index < cv.work_experience.length - 1) {
+          await myExpPage.addAnotherExperience();
+        }
+      }
+    });
+
+    await test.step('Fill Education', async () => {
+      await myExpPage.addFirstEducation();
+      for (const [index, edu] of cv.education.entries()) {
+        await myExpPage.addEducation(
+          index + 1,
+          edu.university,
+          edu.degree,
+          edu.field
+        );
+      }
+      if (cv.education.length > 1) {
+        await myExpPage.deleteEducation(cv.education.length);
+      }
+    });
+
+    await test.step('Fill Languages', async () => {
+      await myExpPage.addFirstLanguage();
+      for (const [index, lang] of cv.languages.entries()) {
+        await myExpPage.addLanguage(index + 1, lang);
+      }
+      if (cv.languages.length > 1) {
+        await myExpPage.deleteLastLanguage(cv.languages.length);
+      }
+    });
+
+    await test.step('Fill Skills', async () => {
+      const allSkills = Object.values(cv.skills).flat();
+      for (const skill of allSkills) {
+        await myExpPage.addSkill(String(skill));
+      }
+    });
+
+    await test.step('Upload Resume and Add Website', async () => {
+      await myExpPage.uploadResume("Emanuel Sanchez - SWE.pdf");
+      await myExpPage.addWebsite(cv.personal_info.github);
+    });
+
+    await test.step('Save and Continue', async () => {
+      await myExpPage.saveAndContinue();
+    });
   });
-})
+});
